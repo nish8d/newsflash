@@ -1,0 +1,12 @@
+numpy
+scikit-learn
+sentence-transformers
+requests
+python-dateutil
+tqdm
+streamlit
+python-dotenv
+langchain
+langchain_ollama
+streamlit
+pandas
