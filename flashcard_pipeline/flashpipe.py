@@ -100,12 +100,11 @@ def main():
     # Initialize generator
     generator = FlashcardGenerator(
         model="mistral",
-        temperature=0.2,  # Lower for more factual, consistent outputs
+        temperature=0.2,
         max_retries=3
     )
     
     # Determine optimal number of workers
-    # For Ollama, 2-6 workers usually optimal depending on your hardware
     max_workers = min(6, os.cpu_count() or 2)
     print(f"Using {max_workers} workers\n")
     
@@ -127,8 +126,7 @@ def main():
         }
         
         # Process completed tasks with progress bar
-        with tqdm(total=total_articles, desc="Progress", unit="article", 
-                  bar_format='{l_bar}{bar}| {n_fmt}/{total_fmt} [{elapsed}<{remaining}]') as pbar:
+        with tqdm(total=total_articles, desc="Processing", unit="article") as pbar:
             for future in as_completed(future_to_article):
                 idx, updated_article, error, title, was_skipped = future.result()
                 
@@ -137,14 +135,11 @@ def main():
                 
                 if was_skipped:
                     skipped += 1
-                    pbar.set_postfix({"✓": successful, "↷": skipped, "✗": failed}, refresh=False)
                 elif error:
                     failed += 1
-                    errors.append(f"#{idx} ({title[:40]}...): {error[:60]}")
-                    pbar.set_postfix({"✓": successful, "↷": skipped, "✗": failed}, refresh=False)
+                    errors.append(f"#{idx}: {error[:80]}")
                 else:
                     successful += 1
-                    pbar.set_postfix({"✓": successful, "↷": skipped, "✗": failed}, refresh=False)
                 
                 pbar.update(1)
                 
@@ -153,31 +148,27 @@ def main():
                     save_updated_results(articles)
     
     # Final save
-    print("\n💾 Saving final results...")
     save_updated_results(articles)
     
     # Print summary
     elapsed_time = time.time() - start_time
-    print(f"\n{'═' * 63}")
-    print("SUMMARY")
-    print(f"{'═' * 63}")
-    print(f"✓ Successful:  {successful}/{total_articles} ({successful/total_articles*100:.1f}%)")
-    print(f"↷ Skipped:     {skipped}/{total_articles} (already processed)")
-    print(f"✗ Failed:      {failed}/{total_articles} ({failed/total_articles*100:.1f}%)")
-    print(f"\n⏱  Total time:  {elapsed_time:.2f}s")
-    print(f"   Avg/article: {elapsed_time/max(to_process, 1):.2f}s")
+    print(f"\n{'-' * 40}")
+    print("Results:")
+    print(f"  Successful: {successful}/{total_articles} ({successful/total_articles*100:.1f}%)")
+    if skipped > 0:
+        print(f"  Skipped: {skipped}")
+    if failed > 0:
+        print(f"  Failed: {failed} ({failed/total_articles*100:.1f}%)")
+    print(f"\nTime: {elapsed_time:.1f}s ({elapsed_time/max(to_process, 1):.1f}s per article)")
     
     if errors:
-        print(f"\n{'─' * 63}")
-        print(f"ERRORS ({len(errors)}):")
-        for error in errors[:10]:  # Show first 10 errors
-            print(f"  • {error}")
-        if len(errors) > 10:
-            print(f"  ... and {len(errors) - 10} more")
+        print(f"\nErrors ({len(errors)}):")
+        for error in errors[:5]:
+            print(f"  {error}")
+        if len(errors) > 5:
+            print(f"  ... and {len(errors) - 5} more")
     
-    print(f"\n{'═' * 63}")
-    print("✨ Pipeline Complete!")
-    print(f"{'═' * 63}\n")
+    print("\nComplete.\n")
 
 
 if __name__ == "__main__":

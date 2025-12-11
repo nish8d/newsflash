@@ -7,7 +7,8 @@ from langchain_core.output_parsers import JsonOutputParser
 from flashcard_schema import Flashcard
 
 # Enhanced prompt that uses the full article body
-ENHANCED_PROMPT = """You are an expert at creating educational flashcards from news articles.
+# Enhanced prompt that uses the full article body
+ENHANCED_PROMPT = """You are an expert at creating educational flashcards from business news articles across various industries and sectors.
 
 Read the FULL ARTICLE BODY below and create ONE comprehensive flashcard.
 
@@ -16,30 +17,30 @@ GUIDELINES:
    - Be specific and reference concrete details from the article
    - Focus on "what", "who", "when", "where", or "why" questions
    - Avoid yes/no questions
-   - Example: "What significant change occurred in Liverpool's home performance after their draw with Sunderland?"
+   - Example: "What strategic partnership did Company X announce in the technology sector?"
 
 2. **Answer**: Provide a detailed, factual answer (2-4 sentences)
    - Include specific names, dates, numbers, and statistics from the article
    - Be precise and comprehensive
-   - Example: "Liverpool failed to win three successive games at Anfield for the first time since March 2021..."
+   - Example: "Company X announced a strategic partnership with Company Y to expand their market presence in the Asia-Pacific region, with an expected investment of $500 million over the next three years..."
 
 3. **Context**: Explain the broader significance (2-4 sentences)
-   - Why does this matter to the industry/field?
-   - What are the implications or future impact?
-   - Connect to larger trends or patterns
+   - Why does this matter to the industry/sector?
+   - What are the business implications or future impact?
+   - Connect to larger market trends, competitive landscape, or regulatory changes
 
 4. **Summary**: Create a concise summary of the entire article (3-5 sentences)
-   - Cover the main points and key developments
-   - Include important statistics or quotes
+   - Cover the main business developments and key points
+   - Include important financial figures, statistics, or quotes from executives
    - Maintain chronological or logical flow
 
-5. **Entity**: The main organization, company, institution, or team
+5. **Entity**: The main organization, company, or institution
    - Use the official full name
-   - If multiple entities, choose the primary subject
+   - If multiple entities, choose the primary subject of the article
 
 6. **Person of Contact**: The key person mentioned
-   - Use full name and title/role
-   - Choose the most prominently featured individual
+   - Use full name and title/role (CEO, CFO, Managing Director, etc.)
+   - Choose the most prominently featured business leader or executive
    - Leave empty if no specific person is central to the story
 
 ARTICLE DETAILS:
@@ -164,10 +165,8 @@ class FlashcardGenerator:
                 
                 # If validation failed and we have retries left
                 if attempt < self.max_retries:
-                    print(f"    Retry {attempt + 1}/{self.max_retries}: {', '.join(issues[:2])}")
                     continue
                 else:
-                    print(f"    Final attempt: {', '.join(issues[:2])}")
                     # Return partial result rather than failing completely
                     return {
                         "summary": result.get("summary", ""),
@@ -180,18 +179,14 @@ class FlashcardGenerator:
                     
             except json.JSONDecodeError as e:
                 if attempt < self.max_retries:
-                    print(f"    JSON error, retrying...")
                     continue
                 else:
-                    print(f"    JSON parsing failed")
                     raise
                     
             except Exception as e:
                 if attempt < self.max_retries:
-                    print(f"    Error: {str(e)[:50]}, retrying...")
                     continue
                 else:
-                    print(f"    Failed: {e}")
                     raise
         
         # Fallback empty result
