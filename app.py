@@ -8,11 +8,18 @@ from datetime import datetime
 # --- 1. SETUP & IMPORTS ---
 # Add pipeline folders to system path so Python can find them
 sys.path.append(os.path.join(os.getcwd(), "news_pipeline"))
+sys.path.append(os.path.join(os.getcwd(), "scraper"))  # <--- NEW: Added Scraper Path
 sys.path.append(os.path.join(os.getcwd(), "flashcard_pipeline"))
 
 # Import pipeline logic (handling potential path errors)
 try:
     from news_pipeline.newspipe import get_all_news
+    
+    # <--- NEW: Import Scraper Logic
+    # CHECK THIS: Ensure the function name inside run_content_pipeline.py matches this import.
+    # If your function is named 'main', change this to: from scraper.run_content_pipeline import main as run_content_scraper
+    from scraper.run_content_pipeline import run_pipeline as run_content_scraper 
+    
     # We rename main to run_flashpipe to avoid confusion
     from flashcard_pipeline.flashpipe import main as run_flashpipe
 except ImportError as e:
@@ -57,7 +64,7 @@ if run_btn:
         try:
             # --- PHASE 1: NEWS FETCHING ---
             with status_container:
-                st.info(f"Fetching news for: **{keyword}**...")
+                st.info(f"1. Fetching news for: **{keyword}**...")
                 
                 # 1. Run News Pipeline
                 news_data = get_all_news(keyword)
@@ -66,18 +73,29 @@ if run_btn:
                 for article in news_data:
                     article.pop("embedding", None)
                 
-                # 3. Save Intermediate JSON (Required for FlashPipe)
+                # 3. Save Intermediate JSON (Required for Scraper)
                 with open(RESULTS_FILE, "w", encoding="utf-8") as f:
                     json.dump(news_data, f, indent=2)
                 
                 st.success(f"News fetched: {len(news_data)} articles")
-                
-            # --- PHASE 2: FLASHCARD GENERATION ---
+
+            # --- PHASE 2: CONTENT SCRAPING (NEW STEP) ---
             with status_container:
-                st.info("Generating flashcards (Mistral/Ollama)...")
+                st.info("2. Scraping article bodies...")
                 
-                # 4. Run Flashcard Pipeline
-                # This function reads resultsgen.json, updates it, and saves it back
+                # 4. Run Scraper Pipeline
+                # This function reads RESULTS_FILE, scrapes the 'link' from each, 
+                # adds the 'body' field, and saves the JSON back to RESULTS_FILE.
+                run_content_scraper()
+                
+                st.success("Article content scraped!")
+
+            # --- PHASE 3: FLASHCARD GENERATION ---
+            with status_container:
+                st.info("3. Generating flashcards (Mistral/Ollama)...")
+                
+                # 5. Run Flashcard Pipeline
+                # This function reads the JSON (now containing 'body') and generates Q&A
                 run_flashpipe()
                 
                 st.success("Flashcards generated!")
@@ -121,6 +139,7 @@ if os.path.exists(RESULTS_FILE):
                     m3.caption(f"**Relevance Score:** {round(item.get('score', 0), 2)}")
 
                 # --- MIDDLE: Summary ---
+                # NOTE: 'body' exists in JSON now, but we are deliberately NOT displaying it.
                 st.markdown("Summary")
                 st.write(item.get("summary", "No summary available."))
 
