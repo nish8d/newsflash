@@ -122,10 +122,18 @@ if os.path.exists(RESULTS_FILE):
                 col_img, col_info = st.columns([1, 3])
                 
                 with col_img:
-                    if item.get("image"):
-                        st.image(item["image"], use_container_width=True)
+                    image_url = item.get("image")
+                    
+                    # LOGIC: Only attempt to load if it looks like a valid web URL
+                    if image_url and isinstance(image_url, str) and image_url.startswith("http"):
+                        try:
+                            st.image(image_url, use_container_width=True)
+                        except Exception:
+                            # If the image fails to load (404 or format error), show nothing
+                            st.empty()
                     else:
-                        st.empty() # Placeholder if no image
+                        # If image is missing or is garbage data (like a timestamp), show nothing
+                        st.empty()
 
                 with col_info:
                     # TITLE & LINK
