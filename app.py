@@ -132,7 +132,7 @@ if os.path.exists(RESULTS_FILE):
                 f1, f2 = st.columns([1, 1])
                 
                 with f1:
-                    st.info(f"Question:**\n\n{item.get('question', 'Pending...')}")
+                    st.info(f"Question:\n\n{item.get('question', 'Pending...')}")
                 
                 with f2:
                     # Answer hidden in expander for "Flashcard" feel
