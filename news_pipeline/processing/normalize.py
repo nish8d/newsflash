@@ -1,9 +1,36 @@
-def normalize_article(title, link, source, summary, date, image=None):
+"""
+Backward-compatible normalizer.
+
+Accepts 4–6 arguments because older fetcher code still passes 'summary'.
+We ignore summary completely and keep only the relevant fields.
+"""
+from typing import Any, Dict
+
+
+def normalize_article(*args, **kwargs) -> Dict[str, Any]:
+    """
+    Supported call styles:
+
+    normalize_article(title, link, source, date)
+    normalize_article(title, link, source, date, image)
+    normalize_article(title, link, source, date, image, summary)  # old style (ignored)
+
+    This makes the pipeline fully backward-compatible.
+    """
+
+    # unpack based on actual arg count
+    title      = args[0] if len(args) > 0 else None
+    link       = args[1] if len(args) > 1 else None
+    source     = args[2] if len(args) > 2 else None
+    date       = args[3] if len(args) > 3 else None
+    image      = args[4] if len(args) > 4 else None
+
+    # args[5] might be summary → ignore safely
+
     return {
         "title": title or "No Headline",
         "link": link or "#",
         "source": str(source or "").upper(),
-        "summary": (summary or "No summary available.")[:1000],
         "published_at": date or "",
         "image": image or "https://via.placeholder.com/150"
     }

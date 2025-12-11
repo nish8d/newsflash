@@ -27,7 +27,7 @@ def embed_articles(articles, batch_size=16):
     texts, idxs = [], []
 
     for i, a in enumerate(articles):
-        combined = a["title"] + "\n" + a["summary"]
+        combined = a["title"]
         h = make_hash(combined)
         a["_hash"] = h
 

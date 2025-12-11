@@ -29,20 +29,9 @@ def load_news_json():
 
 
 def save_updated_results(data):
-    """Save results with backup."""
-    # Create backup before overwriting
-    """
-    if os.path.exists(NEWS_JSON_PATH):
-        backup_path = NEWS_JSON_PATH.replace(".json", "_backup.json")
-        with open(backup_path, "w", encoding="utf-8") as f:
-            with open(NEWS_JSON_PATH, "r", encoding="utf-8") as original:
-                f.write(original.read())
-        print(f"Backup saved to {backup_path}")
-    """
+    """Save results immediately (no backup to avoid slowdown)."""
     with open(NEWS_JSON_PATH, "w", encoding="utf-8") as f:
         json.dump(data, f, indent=2, ensure_ascii=False)
-
-    print(f"Updated resultsgen.json saved.")
 
 
 def process_single_article(args):
@@ -50,9 +39,13 @@ def process_single_article(args):
     idx, article, generator = args
     title = article.get("title", "Untitled Article")
     
+    # Skip if already processed (has summary and question)
+    if article.get("summary") and article.get("question"):
+        return idx, article, None, title, True  # True = skipped
+    
     article_payload = {
         "title": article.get("title", ""),
-        "summary": article.get("summary", ""),
+        "body": article.get("body", ""),
         "published_at": article.get("published_at", ""),
         "source": article.get("source", ""),
     }
@@ -61,47 +54,60 @@ def process_single_article(args):
         result = generator.generate_for_article(article_payload)
         
         # Update article with flashcard data
+        article["summary"] = result.get("summary", "")
         article["question"] = result.get("question", "")
         article["answer"] = result.get("answer", "")
         article["context"] = result.get("context", "")
         article["entity"] = result.get("entity", "")
         article["person_of_contact"] = result.get("person_of_contact", "")
         
-        return idx, article, None, title
+        return idx, article, None, title, False
         
     except Exception as e:
         # Ensure keys exist even on failure
-        article["question"] = ""
-        article["answer"] = ""
-        article["context"] = ""
-        article["entity"] = ""
-        article["person_of_contact"] = ""
+        article["summary"] = article.get("summary", "")
+        article["question"] = article.get("question", "")
+        article["answer"] = article.get("answer", "")
+        article["context"] = article.get("context", "")
+        article["entity"] = article.get("entity", "")
+        article["person_of_contact"] = article.get("person_of_contact", "")
         
-        return idx, article, str(e), title
+        return idx, article, str(e), title, False
 
 
 def main():
-    print("Enhanced Flashcard Pipeline Started\n")
-    print("=" * 60)
+    print("\nFlashcard Pipeline Started")
+    print("-" * 40)
     
     start_time = time.time()
     
     # Load articles
     articles = load_news_json()
     total_articles = len(articles)
-    print(f"Loaded {total_articles} articles\n")
     
-    # Initialize generator (shared across threads)
+    # Check how many already have flashcards
+    already_processed = sum(1 for a in articles if a.get("summary") and a.get("question"))
+    to_process = total_articles - already_processed
+    
+    print(f"Loaded: {total_articles} articles")
+    print(f"Already processed: {already_processed}")
+    print(f"To process: {to_process}\n")
+    
+    if to_process == 0:
+        print("All articles already processed.\n")
+        return
+    
+    # Initialize generator
     generator = FlashcardGenerator(
         model="mistral",
-        temperature=0.3,  # Slightly creative but still focused
-        max_retries=2
+        temperature=0.2,  # Lower for more factual, consistent outputs
+        max_retries=3
     )
     
     # Determine optimal number of workers
-    # Ollama typically handles 2-4 concurrent requests well
-    max_workers = min(4, os.cpu_count() or 1)
-    print(f"Using {max_workers} parallel workers\n")
+    # For Ollama, 2-6 workers usually optimal depending on your hardware
+    max_workers = min(6, os.cpu_count() or 2)
+    print(f"Using {max_workers} workers\n")
     
     # Prepare arguments for parallel processing
     tasks = [(idx, article, generator) for idx, article in enumerate(articles, start=1)]
@@ -109,6 +115,7 @@ def main():
     # Track results
     successful = 0
     failed = 0
+    skipped = 0
     errors = []
     
     # Process in parallel with progress bar
@@ -120,44 +127,57 @@ def main():
         }
         
         # Process completed tasks with progress bar
-        with tqdm(total=total_articles, desc="Processing", unit="article") as pbar:
+        with tqdm(total=total_articles, desc="Progress", unit="article", 
+                  bar_format='{l_bar}{bar}| {n_fmt}/{total_fmt} [{elapsed}<{remaining}]') as pbar:
             for future in as_completed(future_to_article):
-                idx, updated_article, error, title = future.result()
+                idx, updated_article, error, title, was_skipped = future.result()
                 
                 # Update the article in the list
                 articles[idx - 1] = updated_article
                 
-                if error:
+                if was_skipped:
+                    skipped += 1
+                    pbar.set_postfix({"✓": successful, "↷": skipped, "✗": failed}, refresh=False)
+                elif error:
                     failed += 1
-                    errors.append(f"Article {idx} ({title[:50]}...): {error}")
-                    pbar.set_postfix({"✓": successful, "✗": failed})
+                    errors.append(f"#{idx} ({title[:40]}...): {error[:60]}")
+                    pbar.set_postfix({"✓": successful, "↷": skipped, "✗": failed}, refresh=False)
                 else:
                     successful += 1
-                    pbar.set_postfix({"✓": successful, "✗": failed})
+                    pbar.set_postfix({"✓": successful, "↷": skipped, "✗": failed}, refresh=False)
                 
                 pbar.update(1)
+                
+                # Save progress every 10 articles
+                if (successful + failed) % 10 == 0:
+                    save_updated_results(articles)
     
-    # Save results
-    print(f"\n{'=' * 60}")
+    # Final save
+    print("\n💾 Saving final results...")
     save_updated_results(articles)
     
     # Print summary
     elapsed_time = time.time() - start_time
-    print(f"\nSUMMARY")
-    print(f"{'=' * 60}")
-    print(f"Successful: {successful}/{total_articles}")
-    print(f"Failed: {failed}/{total_articles}")
-    print(f"Time: {elapsed_time:.2f}s ({elapsed_time/total_articles:.2f}s per article)")
+    print(f"\n{'═' * 63}")
+    print("SUMMARY")
+    print(f"{'═' * 63}")
+    print(f"✓ Successful:  {successful}/{total_articles} ({successful/total_articles*100:.1f}%)")
+    print(f"↷ Skipped:     {skipped}/{total_articles} (already processed)")
+    print(f"✗ Failed:      {failed}/{total_articles} ({failed/total_articles*100:.1f}%)")
+    print(f"\n⏱  Total time:  {elapsed_time:.2f}s")
+    print(f"   Avg/article: {elapsed_time/max(to_process, 1):.2f}s")
     
     if errors:
-        print(f"\nERRORS ({len(errors)}):")
-        for error in errors[:5]:  # Show first 5 errors
-            print(f"   • {error}")
-        if len(errors) > 5:
-            print(f"   ... and {len(errors) - 5} more")
+        print(f"\n{'─' * 63}")
+        print(f"ERRORS ({len(errors)}):")
+        for error in errors[:10]:  # Show first 10 errors
+            print(f"  • {error}")
+        if len(errors) > 10:
+            print(f"  ... and {len(errors) - 10} more")
     
-    print(f"\n{'=' * 60}")
-    print("Pipeline Finished!")
+    print(f"\n{'═' * 63}")
+    print("✨ Pipeline Complete!")
+    print(f"{'═' * 63}\n")
 
 
 if __name__ == "__main__":

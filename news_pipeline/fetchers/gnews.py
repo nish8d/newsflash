@@ -21,7 +21,6 @@ def fetch_gnews(keyword, api_key, country="in"):
                 item.get("title"),
                 item.get("url"),
                 item.get("source", {}).get("name"),
-                item.get("description"),
                 item.get("publishedAt"),
                 item.get("image")
             )

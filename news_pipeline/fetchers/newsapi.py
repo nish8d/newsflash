@@ -23,7 +23,6 @@ def fetch_newsapi(keyword, api_key):
                 item.get("title"),
                 item.get("url"),
                 item.get("source", {}).get("name"),
-                item.get("description"),
                 item.get("publishedAt"),
                 item.get("urlToImage")
             )
